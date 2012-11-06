@@ -43,11 +43,11 @@ public class team01
   public static void main(String args[])
   {
     team01 termProject = new team01();
-    termProject.optionList();
     Scanner scn = new Scanner(System.in);
     String option;
 
     while(true){
+      termProject.optionList();
       option = scn.next();
       option = option.toLowerCase();
       if(option.compareTo("login") == 0) {
@@ -69,12 +69,25 @@ public class team01
         termProject.register();
         System.out.println();
         System.out.println("Account Created");
+        System.out.println();
+        System.out.println("Welcome to Faces@Pitt");
         termProject.mainPage(termProject);
 
       }else if (option.compareTo("exit") == 0) {
+        termProject.exit();
         System.exit(1);
       }
 
+    }
+  }
+
+  public void exit(){
+    try{
+      state.close();
+      System.exit(1);
+    }catch(Exception Ex){
+      System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
+      Ex.printStackTrace();
     }
   }
 
@@ -87,11 +100,13 @@ public class team01
         termProject.optionListLogin();
         option = scn.next().toLowerCase();
         if(option.compareTo("out") == 0){
-          state.close();
-          System.exit(1);
+          currentUserID = 0;
+          return;
         }else if (option.compareTo("all") == 0) {
-          termProject.getMessageIDsFromMessageRecipients();
-        } 
+          termProject.getAllMessages();
+        }else if (option.compareTo("group") == 0) {
+          termProject.addToGroup(termProject);
+        }
       }
     }catch(Exception Ex){
       System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
@@ -99,7 +114,80 @@ public class team01
     }
   }
 
-  public void getMessageIDsFromMessageRecipients() {
+  // TODO: If a user tries to join a group that they have already joined, deal with that problem.
+  public void addToGroup(team01 termProject) {
+    try{
+      termProject.listGroups();
+      String groupID;
+      Scanner scn = new Scanner(System.in);
+      System.out.println();
+      System.out.println("Please Enter a Group ID Number:");
+      groupID = scn.nextLine();
+      int num = 0;
+
+      // check to see if the user is already a member of the group and return to the main page menu
+      query = "SELECT * FROM GroupMembership WHERE gID=" + groupID + "AND userID=" + currentUserID;
+      rs = state.executeQuery(query);
+
+      if(rs.next()) {
+        System.out.println();
+        System.out.println("You are already a member of this group.");
+        return;
+      }
+
+      // grab the total number of members of the selected group
+      query = "SELECT count(*) FROM GroupMembership WHERE gID=" + groupID;  
+      rs = state.executeQuery(query);
+
+      // store the number
+      if(rs.next()) {
+        num = rs.getInt(1);
+      }
+
+      // if there are less than 10 members, add the user to the group
+      if(num < 10){
+        query = "INSERT INTO GroupMembership VALUES (" + groupID + "," + currentUserID + ")";
+        int result = state.executeUpdate(query);
+        if(result > 0){
+          System.out.println();
+          System.out.println("You are now added to the group.");
+        }else{
+          System.out.println();
+          System.out.println("Unable to add you to the group.");
+        }
+      // otherwise let the user know that the group is full
+      }else{
+        System.out.println();
+        System.out.println("Sorry, the group is full.");
+      }
+    }catch(Exception Ex){
+      System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
+      Ex.printStackTrace();
+    }
+
+  }
+
+  public void listGroups() {
+    try{
+      query = "SELECT * FROM Groups";  
+      rs = state.executeQuery(query);
+
+
+      while(rs.next()) {
+        System.out.println();
+        System.out.println("Group ID         : " + rs.getInt(1));
+        System.out.println("Group Name       : " + rs.getString(2));
+        System.out.println("Group Description: " + rs.getString(3));
+      }
+
+      System.out.println();
+    }catch(Exception Ex){
+      System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
+      Ex.printStackTrace();
+    }
+  }
+
+  public void getAllMessages() {
     try{
 
       // getting all of the msgID's of the messages the current user received
@@ -328,6 +416,7 @@ public class team01
       int rs = state.executeUpdate(query);
 
       currentMaxID++;
+      currentUserID = currentMaxID;
     }catch(Exception Ex)  //What to do with any exceptions
     {
       System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
