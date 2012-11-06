@@ -13,6 +13,7 @@ public class team01
   private String query;
   private String username, password;
   private int currentMaxID;
+  private int currentUserID;
 
   public team01()
   {
@@ -42,7 +43,7 @@ public class team01
   public static void main(String args[])
   {
     team01 termProject = new team01();
-    termProject.OptionList();
+    termProject.optionList();
     Scanner scn = new Scanner(System.in);
     String option;
 
@@ -51,20 +52,24 @@ public class team01
       option = option.toLowerCase();
       if(option.compareTo("login") == 0) {
 
-        if(termProject.Login() > 0) {
+        if(termProject.login() > 0) {
+          System.out.println();
           System.out.println("Login Successful");
           System.out.println();
+          System.out.println("Welcome to Faces@Pitt");
+          termProject.mainPage(termProject);
         }else{
-          System.out.println("Login Unsuccessful");
           System.out.println();
-          termProject.OptionList();
+          System.out.println("Login Unsuccessful");
+          termProject.optionList();
         }
 
       }else if(option.compareTo("register") == 0){
         
-        termProject.Register();
+        termProject.register();
+        System.out.println();
         System.out.println("Account Created");
-        termProject.MainPage(termProject);
+        termProject.mainPage(termProject);
 
       }else if (option.compareTo("exit") == 0) {
         System.exit(1);
@@ -73,16 +78,19 @@ public class team01
     }
   }
 
-  public void MainPage(team01 termProject){
+  // MainPage 
+  public void mainPage(team01 termProject){
     Scanner scn = new Scanner(System.in);
     String option;
     try{
       while(true){
+        termProject.optionListLogin();
         option = scn.next().toLowerCase();
-        termProject.OptionListLogin();
         if(option.compareTo("out") == 0){
           state.close();
           System.exit(1);
+        }else if (option.compareTo("all") == 0) {
+          termProject.getMessageIDsFromMessageRecipients();
         } 
       }
     }catch(Exception Ex){
@@ -91,7 +99,101 @@ public class team01
     }
   }
 
-  public int Login(){
+  public void getMessageIDsFromMessageRecipients() {
+    try{
+
+      // getting all of the msgID's of the messages the current user received
+      query = "SELECT msgID FROM MessageRecipients WHERE userID =" + currentUserID;
+      rs = state.executeQuery(query);
+      ArrayList<Integer> msgIDs = new ArrayList<Integer>();
+      int numMsgID;
+      while(true) {
+        if(rs.next()){
+          msgIDs.add(rs.getInt(1));
+        }else{
+          break;
+        }
+      }
+
+      numMsgID = msgIDs.size();
+
+      if(numMsgID == 0){
+        System.out.println();
+        System.out.println("You have no messages.");
+        return;
+      }
+
+      // getting all of the messages that corresponds to the msgID
+      SimpleDateFormat df = new SimpleDateFormat("dd-MMM-yyyy");
+      int msgID;
+      int fromID;
+      String message;
+      int toUserID;
+      int toGroupID;
+      java.util.Date dateSent;
+      for(int x = 0; x < numMsgID; ++x) {
+        query = "SELECT * FROM Messages WHERE msgID =" + msgIDs.get(x);
+        ResultSet result = state.executeQuery(query);
+        ResultSet extra;
+        if(result.next()){
+          msgID = result.getInt(1);
+          fromID = result.getInt(2);
+          message = result.getString(3);
+          toUserID = result.getInt(4);
+          toGroupID = result.getInt(5);
+          dateSent = result.getDate(6);
+
+          // print out the message ID
+          System.out.println();
+          System.out.println("Message ID: " + msgID);
+
+          // grab the name of the person who sent the message and print it out
+          query = "SELECT name FROM Profile WHERE userID = " + fromID;
+          extra = state.executeQuery(query);
+          extra.next();
+          System.out.println("From      : " + extra.getString(1));
+
+          // print out the actual message
+          System.out.println("Message   : "  + message);
+
+          // if there is a toUserID set, get the name of the person with
+          // that ID, otherwise, print out blank
+          if(toUserID == 0){ 
+            System.out.println("To User   : ");
+          }else{
+            query = "SELECT name FROM Profile WHERE userID = " + toUserID;
+            extra = state.executeQuery(query);
+            extra.next();
+            System.out.println("To User   : " + extra.getString(1));
+          }
+
+          // if there is a toGroupID set, get the name of the group with
+          // that ID, otherwise, print out blank
+          if(toGroupID == 0){
+            System.out.println("To Group  :");
+          }else{
+            query = "SELECT name FROM Groups WHERE gID = " + toGroupID;
+            extra = state.executeQuery(query);
+            extra.next();
+            System.out.println("To Group  : " + extra.getString(1));            
+          }
+
+          // print out the date sent
+          System.out.println("Date Sent : "  + df.format(dateSent));
+
+        }else{
+          System.out.println("ERRROOORRRRR");
+        }
+
+      }
+
+    }catch(Exception Ex){
+      System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
+      Ex.printStackTrace();
+    }
+  }
+
+  public int login(){
     Scanner sc = new Scanner(System.in);
     int retval = 0;
 
@@ -109,6 +211,10 @@ public class team01
 
       // if the email/password combo exists sign them in
       if(rs.next()){
+
+        // save the current userID
+        currentUserID = rs.getInt(1);
+
         // this is the get todays date
         long time = System.currentTimeMillis();
         SimpleDateFormat df = new SimpleDateFormat("dd-MMM-yyyy");
@@ -132,7 +238,7 @@ public class team01
     return retval;
   }
 
-  public void Register() {
+  public void register() {
 
     try{
       String regex = "^\\w\\w\\w(\\d\\d|\\d|)@pitt.edu";
@@ -230,7 +336,7 @@ public class team01
 
   }
 
-  public void OptionList(){
+  public void optionList(){
     System.out.println();
     System.out.println("What would you like to do?");
     System.out.println();
@@ -238,12 +344,10 @@ public class team01
     System.out.println("REGISTER");
     System.out.println("EXIT");
     System.out.println();
-    System.out.println("Option: (Please Enter an Upper Case Key Word): ");
+    System.out.println("Option: (Please Enter an Upper Case Key Word) ");
   }
 
-  public void OptionListLogin(){
-    System.out.println();
-    System.out.println("Welcome to Faces@Pitt");
+  public void optionListLogin(){
     System.out.println();
     System.out.println("SEND Message");
     System.out.println("ADD Friend");
@@ -257,6 +361,8 @@ public class team01
     System.out.println("My STATISTICS");
     System.out.println("DROP Account");
     System.out.println("Log OUT");
+    System.out.println();
+    System.out.println("Option: (Please Enter an Upper Case Key Word) ");
 
   }
 }
