@@ -14,6 +14,7 @@ public class team01
   private String username, password;
   private int currentMaxID;
   private int currentUserID;
+  private String lastLoggedIn;
 
   public team01()
   {
@@ -106,8 +107,104 @@ public class team01
           termProject.getAllMessages();
         }else if (option.compareTo("group") == 0) {
           termProject.addToGroup(termProject);
+        }else if (option.compareTo("new") == 0) {
+          termProject.getNewMessages();
+        }else if (option.compareTo("add") == 0) {
+          termProject.addFriend();
         }
       }
+    }catch(Exception Ex){
+      System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
+      Ex.printStackTrace();
+    }
+  }
+
+  public void getNewMessages() {
+    try{
+
+      // getting all of the msgID's of the messages the current user received
+      query = "SELECT msgID FROM MessageRecipients WHERE userID =" + currentUserID;
+      rs = state.executeQuery(query);
+      ArrayList<Integer> msgIDs = new ArrayList<Integer>();
+      int numMsgID;
+      while(true) {
+        if(rs.next()){
+          msgIDs.add(rs.getInt(1));
+        }else{
+          break;
+        }
+      }
+
+      numMsgID = msgIDs.size();
+
+      if(numMsgID == 0){
+        System.out.println();
+        System.out.println("You have no messages.");
+        return;
+      }
+
+      // getting all of the messages that corresponds to the msgID
+      SimpleDateFormat df = new SimpleDateFormat("dd-MMM-yyyy");
+      int msgID;
+      int fromID;
+      String message;
+      int toUserID;
+      int toGroupID;
+      java.util.Date dateSent;
+      for(int x = 0; x < numMsgID; ++x) {
+        query = "SELECT * FROM Messages WHERE msgID =" + msgIDs.get(x) + "AND dateSent > '" + lastLoggedIn + "'";
+        ResultSet result = state.executeQuery(query);
+        ResultSet extra;
+        if(result.next()){
+          msgID = result.getInt(1);
+          fromID = result.getInt(2);
+          message = result.getString(3);
+          toUserID = result.getInt(4);
+          toGroupID = result.getInt(5);
+          dateSent = result.getDate(6);
+
+          // print out the message ID
+          System.out.println();
+          System.out.println("Message ID: " + msgID);
+
+          // grab the name of the person who sent the message and print it out
+          query = "SELECT name FROM Profile WHERE userID = " + fromID;
+          extra = state.executeQuery(query);
+          extra.next();
+          System.out.println("From      : " + extra.getString(1));
+
+          // print out the actual message
+          System.out.println("Message   : "  + message);
+
+          // if there is a toUserID set, get the name of the person with
+          // that ID, otherwise, print out blank
+          if(toUserID == 0){ 
+            System.out.println("To User   : ");
+          }else{
+            query = "SELECT name FROM Profile WHERE userID = " + toUserID;
+            extra = state.executeQuery(query);
+            extra.next();
+            System.out.println("To User   : " + extra.getString(1));
+          }
+
+          // if there is a toGroupID set, get the name of the group with
+          // that ID, otherwise, print out blank
+          if(toGroupID == 0){
+            System.out.println("To Group  :");
+          }else{
+            query = "SELECT name FROM Groups WHERE gID = " + toGroupID;
+            extra = state.executeQuery(query);
+            extra.next();
+            System.out.println("To Group  : " + extra.getString(1));            
+          }
+
+          // print out the date sent
+          System.out.println("Date Sent : "  + df.format(dateSent));
+
+        }
+
+      }
+
     }catch(Exception Ex){
       System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
       Ex.printStackTrace();
@@ -282,6 +379,7 @@ public class team01
   }
 
   public int login(){
+    SimpleDateFormat df = new SimpleDateFormat("dd-MMM-yyyy");
     Scanner sc = new Scanner(System.in);
     int retval = 0;
 
@@ -302,10 +400,9 @@ public class team01
 
         // save the current userID
         currentUserID = rs.getInt(1);
-
+        lastLoggedIn = df.format(rs.getDate(8));
         // this is the get todays date
         long time = System.currentTimeMillis();
-        SimpleDateFormat df = new SimpleDateFormat("dd-MMM-yyyy");
         String today = df.format(new java.util.Date(time));
         
         // Updating the Profile table with the date the user logged in if they typed in the correct 
@@ -453,5 +550,66 @@ public class team01
     System.out.println();
     System.out.println("Option: (Please Enter an Upper Case Key Word) ");
 
+  }
+
+  public void addFriend(){
+    try{
+      Scanner scn = new Scanner(System.in);
+      String message;
+      String targetID;
+
+      //lists all the user who are not already friends with the current user
+      ResultSet availableUsers;
+      query = "SELECT userID, name "+
+             "FROM ((SELECT DISTINCT UserID, name FROM Profile)"+
+                      " MINUS (SELECT DISTINCT p.UserID, name"+
+                                " FROM (SELECT userID2 AS userID "+
+                                        "FROM Friends WHERE userID1 =  "+currentUserID+")"+
+                                        " f JOIN Profile p ON f.userID = p.userID)) "+
+              "WHERE userID <> "+currentUserID;
+
+      availableUsers = state.executeQuery(query);
+      System.out.println("\nPlease select the user ID of the person you wish to send a request to:\n"
+                          +"[#: User Name, User ID]");
+      for(int count = 1; availableUsers.next(); count++) {
+        System.out.println(count+": "+availableUsers.getString(2)+", "+availableUsers.getString(1));
+      }
+
+      //Prompt for the user to request
+      ResultSet targetUser;
+      System.out.print("Enter the User ID now: ");
+      targetID = scn.nextLine();
+      query = "SELECT name FROM Profile WHERE userID = "+targetID;
+      targetUser = state.executeQuery(query);
+      targetUser.next();
+      String reqdFriend = targetUser.getString(1);
+      System.out.println("\nA request will be sent to "+reqdFriend);
+
+      //add message
+      while(true){
+        System.out.println("\nPlease enter a message:");
+        message = scn.nextLine();
+        if(message.length()>1028){//veryify the length is within 1028 NOTE: THIS CODE IS UNTESTED: thot freezes if you type more than a few lines
+          message = message.substring(1028);
+          System.out.print("\nThe message is too long, it was truncated to:\n"+message+"\nis this ok?[y/n] ");
+          if(scn.nextLine().toLowerCase().equals("n")) continue;
+        }
+        break;
+      }
+     
+     //verify send
+      System.out.print("\nAre you sure you want to send a request to "+reqdFriend+"? [y/n] ");
+      if(scn.nextLine().toLowerCase().equals("y")){
+        query = "INSERT INTO PendingFriends (fromID, toID, message) VALUES("+currentUserID+", "+targetID+", "+"'"+message+"')";
+        state.executeQuery(query);
+        System.out.println("\nRequest sent");        
+      }
+      else System.out.println("\nRequest canceled");
+
+    }
+    catch(Exception Ex){
+      System.out.println("Error connecting to database.  Machine Error: " + Ex.toString());
+      Ex.printStackTrace();
+    }
   }
 }
